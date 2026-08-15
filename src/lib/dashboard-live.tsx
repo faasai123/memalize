@@ -75,10 +75,13 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let newestAt = 0;
 
     const push = (row: LiveRow, live: boolean) => {
       if (seen.current.has(row.id)) return;
       seen.current.add(row.id);
+      const t = new Date(row.created_at).getTime();
+      if (Number.isFinite(t)) newestAt = Math.max(newestAt, t);
       setRows((prev) => [row, ...prev].slice(0, 5000));
       if (live) {
         setLiveSince((n) => n + 1);
@@ -86,27 +89,60 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    (async () => {
-      const { data } = await supabase
+    /** Initial load + catch-up poll. `live` marks rows as newly arrived. */
+    const load = async (live: boolean) => {
+      let q = supabase
         .from("live_responses")
         .select("id, created_at, gender, age_group, scores")
         .order("created_at", { ascending: false })
-        .limit(2000);
+        .limit(live ? 200 : 2000);
+      if (live && newestAt) q = q.gt("created_at", new Date(newestAt).toISOString());
+      const { data } = await q;
       if (cancelled || !data) return;
-      for (const r of [...data].reverse()) push(r as unknown as LiveRow, false);
-    })();
+      for (const r of [...data].reverse()) push(r as unknown as LiveRow, live);
+    };
 
-    const channel = supabase
-      .channel("live-responses")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "live_responses" },
-        (payload) => push(payload.new as unknown as LiveRow, true),
-      )
-      .subscribe((status) => setConnected(status === "SUBSCRIBED"));
+    void load(false);
+
+    // Realtime push: instant updates when anyone submits a survey.
+    let channel = subscribe();
+    function subscribe() {
+      return supabase
+        .channel(`live-responses-${Math.random().toString(36).slice(2)}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "live_responses" },
+          (payload) => push(payload.new as unknown as LiveRow, true),
+        )
+        .subscribe((status) => {
+          if (cancelled) return;
+          setConnected(status === "SUBSCRIBED");
+          // Socket died (backgrounded tab, network blip): rebuild it so the
+          // dashboard keeps updating without a page refresh.
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setTimeout(() => {
+              if (cancelled) return;
+              supabase.removeChannel(channel);
+              channel = subscribe();
+              void load(true);
+            }, 2000);
+          }
+        });
+    }
+
+    // Safety net: poll for anything the socket missed.
+    const poll = setInterval(() => void load(true), 15000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
       supabase.removeChannel(channel);
     };
   }, []);
