@@ -11,8 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/survey")({
   head: () => ({
-    title: "Memalize survey — Rate how memes make you feel",
     meta: [
+      { title: "Memalize survey — Rate how memes make you feel" },
       {
         name: "description",
         content:
@@ -25,8 +25,10 @@ export const Route = createFileRoute("/survey")({
           "Three random memes per category, five emotions, a 1-10 scale. Your ratings feed the live Memalize dashboard.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://memalize.lovable.app/survey" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://memalize.lovable.app/survey" }],
   }),
   component: SurveyPage,
 });
@@ -283,6 +285,37 @@ function SurveyPage() {
 
   const submitSurvey = async () => {
     setSubmitted(true);
+
+    // Publish an anonymous, per-category average so every open dashboard
+    // updates in realtime — this happens for signed-in and guest users alike.
+    const scores: Record<string, Record<string, number>> = {};
+    for (const { category, items } of groups) {
+      const acc: Record<string, { sum: number; n: number }> = {};
+      for (const item of items) {
+        const r = ratings[item.id];
+        if (!r) continue;
+        for (const e of emotions) {
+          const v = r[e.key];
+          if (typeof v !== "number") continue;
+          const cell = (acc[e.key] ??= { sum: 0, n: 0 });
+          cell.sum += v;
+          cell.n += 1;
+        }
+      }
+      const avg: Record<string, number> = {};
+      for (const [k, cell] of Object.entries(acc)) {
+        if (cell.n) avg[k] = +(cell.sum / cell.n).toFixed(2);
+      }
+      if (Object.keys(avg).length) scores[category.key] = avg;
+    }
+    if (Object.keys(scores).length) {
+      await supabase.from("live_responses").insert({
+        gender,
+        age_group: ageGroup,
+        scores: scores as never,
+      });
+    }
+
     if (!user) return;
     setSaveState("saving");
     const { error } = await supabase.from("survey_results").insert({

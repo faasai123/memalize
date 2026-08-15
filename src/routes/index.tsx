@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { findSegment, segmentMetrics } from "@/lib/dashboard-segments";
 import { TimeRangeProvider, useTimeRange, rangeMeta } from "@/lib/time-range";
+import { LiveDataProvider, useLiveAgg } from "@/lib/dashboard-live";
 import { SegmentPicker } from "@/components/dashboard/segment-picker";
 import { TopBar } from "@/components/dashboard/top-bar";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -16,8 +17,8 @@ import { OnboardingGate } from "@/components/onboarding-gate";
 
 export const Route = createFileRoute("/")({
   head: () => ({
-    title: "Memalize — Real-time meme emotion analytics",
     meta: [
+      { title: "Memalize — Real-time meme emotion analytics" },
       {
         name: "description",
         content:
@@ -30,13 +31,17 @@ export const Route = createFileRoute("/")({
           "Real-time dashboard tracking how meme categories make people feel — happy, sad, angry, stressed, or bored.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://memalize.lovable.app/" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://memalize.lovable.app/" }],
   }),
   component: () => (
     <TimeRangeProvider>
-      <OnboardingGate />
-      <DashboardPage />
+      <LiveDataProvider>
+        <OnboardingGate />
+        <DashboardPage />
+      </LiveDataProvider>
     </TimeRangeProvider>
   ),
 });
@@ -44,7 +49,29 @@ export const Route = createFileRoute("/")({
 function DashboardPage() {
   const [segment, setSegment] = useState("all");
   const { range } = useTimeRange();
-  const metrics = segmentMetrics(segment, range);
+  const { agg, liveSince, connected } = useLiveAgg(segment, range);
+  const baseMetrics = segmentMetrics(segment, range);
+  // Fold real submissions into the headline metrics so the numbers move the
+  // moment another user finishes a survey.
+  const metrics = baseMetrics.map((m) => {
+    if (!agg.count) return m;
+    if (m.key === "responses") {
+      const n =
+        Number(String(m.value).replace(/[^0-9.]/g, "")) + agg.count;
+      return { ...m, value: n.toLocaleString("en-US") };
+    }
+    if (m.key === "happiness") {
+      const cells = Object.values(agg.byCat)
+        .map((c) => c["happy"])
+        .filter(Boolean) as { sum: number; n: number }[];
+      const sum = cells.reduce((s, c) => s + c.sum, 0);
+      const n = cells.reduce((s, c) => s + c.n, 0);
+      if (!n) return m;
+      const blended = (Number(m.value) * 40 + sum) / (40 + n);
+      return { ...m, value: blended.toFixed(1) };
+    }
+    return m;
+  });
   const segmentLabel = findSegment(segment).label;
   const rangeLabel = rangeMeta[range].label;
   return (
@@ -58,6 +85,11 @@ function DashboardPage() {
             <SegmentPicker value={segment} onChange={setSegment} />
             <p className="text-xs text-muted-foreground">
               {metrics[0]?.value} responses · {segmentLabel} · {rangeLabel} · updated just now
+              {connected ? (
+                <span className="ml-2 text-foreground">
+                  · live sync on{liveSince ? ` · +${liveSince} new` : ""}
+                </span>
+              ) : null}
             </p>
           </div>
 
