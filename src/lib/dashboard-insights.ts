@@ -8,6 +8,7 @@ import {
   findSegment,
 } from "./dashboard-segments";
 import type { TimeRange } from "./time-range";
+import { blendCategoryEmotion, type LiveAgg } from "./dashboard-live";
 
 export type Insight = {
   key: string;
@@ -30,10 +31,16 @@ const label = (e: Emotion) => emotions.find((x) => x.key === e)!.label;
 export function buildInsights(
   segment: string,
   range: TimeRange,
+  agg?: LiveAgg,
 ): { insights: Insight[]; headline: string } {
   const cats = segmentCategories(segment, range);
   const byEmotion = Object.fromEntries(
-    emotions.map((e) => [e.key, segmentCategoryEmotion(segment, e.key, range)]),
+    emotions.map((e) => [
+      e.key,
+      agg
+        ? blendCategoryEmotion(segmentCategoryEmotion(segment, e.key, range), agg, e.key)
+        : segmentCategoryEmotion(segment, e.key, range),
+    ]),
   ) as Record<Emotion, { key: string; label: string; value: number }[]>;
 
   const at = (e: Emotion, key: string) =>

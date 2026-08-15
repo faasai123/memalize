@@ -273,6 +273,15 @@ export const segmentCategoryEmotionShare = memoize(function segmentCategoryEmoti
 ): (CategoryEmotionPoint & { share: number })[] {
   const points = segmentCategoryEmotion(id, emotion, range);
   const cats = segmentCategories(id, range);
+  return sharesFromPoints(points, cats);
+});
+
+// Same percentage math, but usable with points that were blended with live
+// survey data (see dashboard-live.tsx).
+export function sharesFromPoints(
+  points: CategoryEmotionPoint[],
+  cats: MemeCategory[],
+): (CategoryEmotionPoint & { share: number })[] {
   const weights = points.map((p, i) => {
     const base = cats[i]?.share ?? 10;
     return Math.max(0.5, base * (p.value / 6));
@@ -291,4 +300,4 @@ export const segmentCategoryEmotionShare = memoize(function segmentCategoryEmoti
     remainder -= 1;
   }
   return points.map((p, i) => ({ ...p, share: floored[i]! }));
-});
+}
