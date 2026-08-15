@@ -10,7 +10,11 @@ import {
   type Metric,
   type Emotion,
 } from "./dashboard-data";
-import { rangeMeta, type TimeRange } from "./time-range";
+import {
+  rangeMeta,
+  TOTAL_RESPONSES_SINCE_LAUNCH,
+  type TimeRange,
+} from "./time-range";
 
 export type Segment = { id: string; label: string; short: string };
 export type SegmentGroup = { key: string; label: string; options: Segment[] };
@@ -186,16 +190,22 @@ export const segmentMetrics = memoize(function segmentMetrics(
   range: TimeRange = "1D",
 ): Metric[] {
   const share = segmentShare(id);
-  const scale = rangeMeta[range].scale;
+  const meta = rangeMeta[range];
+  const scale = meta.scale;
+  const responseCount = Math.max(
+    parseSegment(id).length ? 1 : 2,
+    Math.round(TOTAL_RESPONSES_SINCE_LAUNCH * share * scale),
+  );
   const s = salt(id, range);
   const emoKeys = Object.keys(timelineBases) as Emotion[];
   return metrics.map((m, i) => {
     const j = jitter(s + m.key, i);
     let value = m.value;
     if (m.key === "responses") {
-      value = Math.round(12847 * share * scale).toLocaleString("en-US");
+      value = responseCount.toLocaleString("en-US");
     } else if (m.key === "rate") {
-      value = String(Math.max(1, Math.round(284 * share)));
+      const perMin = responseCount / meta.minutes;
+      value = perMin >= 1 ? perMin.toFixed(1) : perMin.toFixed(3);
     } else if (m.key === "happiness") {
       value = clamp(6.4 + j * 1.2, 1, 10).toFixed(1);
     } else {
