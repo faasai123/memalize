@@ -13,8 +13,13 @@ export type RangeMeta = {
   points: number;
   /** Label for the i-th sample (0 = oldest, n-1 = newest). */
   stepLabel: (i: number, n: number) => string;
-  /** Multiplier applied to cumulative response counts. */
+  /**
+   * Fraction of the all-time response total (100 since launch) that falls
+   * inside this range. 1 = everything since launch.
+   */
   scale: number;
+  /** Length of the range in minutes, used for the responses/min metric. */
+  minutes: number;
 };
 
 export const rangeMeta: Record<TimeRange, RangeMeta> = {
@@ -24,7 +29,8 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "m",
     points: 24,
     stepLabel: (i) => `${23 - i}m`,
-    scale: 0.015,
+    scale: 0.06,
+    minutes: 60,
   },
   "1D": {
     label: "last 24 hours",
@@ -32,7 +38,8 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "h",
     points: 24,
     stepLabel: (i) => `${23 - i}h`,
-    scale: 0.5,
+    scale: 0.16,
+    minutes: 60 * 24,
   },
   "1W": {
     label: "last 7 days",
@@ -40,7 +47,8 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "d",
     points: 7,
     stepLabel: (i) => `${6 - i}d`,
-    scale: 3,
+    scale: 0.38,
+    minutes: 60 * 24 * 7,
   },
   "1M": {
     label: "last 30 days",
@@ -48,7 +56,8 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "d",
     points: 30,
     stepLabel: (i) => `${29 - i}d`,
-    scale: 12,
+    scale: 0.62,
+    minutes: 60 * 24 * 30,
   },
   "1Y": {
     label: "last 12 months",
@@ -56,7 +65,8 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "mo",
     points: 12,
     stepLabel: (i) => `${11 - i}mo`,
-    scale: 150,
+    scale: 0.92,
+    minutes: 60 * 24 * 365,
   },
   ALL: {
     label: "since launch",
@@ -64,9 +74,13 @@ export const rangeMeta: Record<TimeRange, RangeMeta> = {
     unit: "mo",
     points: 30,
     stepLabel: (i) => `${29 - i}mo`,
-    scale: 420,
+    scale: 1,
+    minutes: 60 * 24 * 365,
   },
 };
+
+/** Total responses collected since launch (baseline dataset size). */
+export const TOTAL_RESPONSES_SINCE_LAUNCH = 100;
 
 export const timeRangeKeys: TimeRange[] = ["1H", "1D", "1W", "1M", "1Y", "ALL"];
 
