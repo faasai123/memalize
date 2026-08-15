@@ -209,6 +209,10 @@ function SurveyPage() {
   const [collected, setCollected] = useState<string[]>([]);
   const { user } = useSession();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Ids of the rows this session already published. Re-submitting after
+  // "Edit answers" updates these rows instead of counting a new response.
+  const [liveRowId, setLiveRowId] = useState<string | null>(null);
+  const [resultRowId, setResultRowId] = useState<string | null>(null);
 
   // Signed-in people keep their gender / age group across sessions.
   useEffect(() => {
@@ -309,24 +313,48 @@ function SurveyPage() {
       if (Object.keys(avg).length) scores[category.key] = avg;
     }
     if (Object.keys(scores).length) {
-      await supabase.from("live_responses").insert({
+      const payload = {
         gender,
         age_group: ageGroup,
         scores: scores as never,
-      });
+      };
+      if (liveRowId) {
+        await supabase.from("live_responses").update(payload).eq("id", liveRowId);
+      } else {
+        const { data } = await supabase
+          .from("live_responses")
+          .insert(payload)
+          .select("id")
+          .maybeSingle();
+        if (data?.id) setLiveRowId(data.id);
+      }
     }
 
     if (!user) return;
     setSaveState("saving");
-    const { error } = await supabase.from("survey_results").insert({
+    const resultPayload = {
       user_id: user.id,
       gender,
       age_group: ageGroup,
       ratings: ratings as never,
       groups: groups as never,
       collected,
-    });
-    setSaveState(error ? "error" : "saved");
+    };
+    if (resultRowId) {
+      const { error } = await supabase
+        .from("survey_results")
+        .update(resultPayload)
+        .eq("id", resultRowId);
+      setSaveState(error ? "error" : "saved");
+    } else {
+      const { data, error } = await supabase
+        .from("survey_results")
+        .insert(resultPayload)
+        .select("id")
+        .maybeSingle();
+      if (data?.id) setResultRowId(data.id);
+      setSaveState(error ? "error" : "saved");
+    }
   };
 
   const totalItems = groups.reduce((n, g) => n + g.items.length, 0) + 2;
