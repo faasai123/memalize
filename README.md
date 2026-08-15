@@ -2,6 +2,8 @@
 
 > Real-time meme emotion analytics — see how memes make people feel.
 
+🔗 **Live site:** <https://memalize.lovable.app>
+
 Memalize is a full-stack web app that turns internet memes into emotion data.
 Visitors view three randomly sampled memes per category and rate each one across
 five emotions (Happy, Sad, Angry, Stressed, Bored) on a 1–10 scale. Their answers
