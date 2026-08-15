@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { Sigma } from "lucide-react";
 import { emotions, type Emotion } from "@/lib/dashboard-data";
 import { segmentCategoryEmotion, findSegment } from "@/lib/dashboard-segments";
+import { useLiveAgg, blendCategoryEmotion } from "@/lib/dashboard-live";
 import { useTimeRange, rangeMeta } from "@/lib/time-range";
 
 type Row = {
@@ -30,11 +31,16 @@ function stats(values: number[]) {
 export const StatsPanel = memo(function StatsPanel({ segment }: { segment: string }) {
   const { range } = useTimeRange();
   const segmentLabel = findSegment(segment).label;
+  const { agg } = useLiveAgg(segment, range);
 
   const rows: Row[] = useMemo(
     () =>
       emotions.map((e) => {
-        const points = segmentCategoryEmotion(segment, e.key, range);
+        const points = blendCategoryEmotion(
+          segmentCategoryEmotion(segment, e.key, range),
+          agg,
+          e.key,
+        );
         const values = points.map((p) => p.value);
         const { mean, median, sd } = stats(values);
         const min = points.reduce((a, b) => (b.value < a.value ? b : a), points[0]!);
@@ -51,7 +57,7 @@ export const StatsPanel = memo(function StatsPanel({ segment }: { segment: strin
           n: values.length,
         };
       }),
-    [segment, range],
+    [segment, range, agg],
   );
 
   const overall = useMemo(() => stats(rows.map((r) => r.mean)), [rows]);

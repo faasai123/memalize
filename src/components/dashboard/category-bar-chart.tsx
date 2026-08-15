@@ -13,6 +13,7 @@ import {
 import { findSegment, segmentCategoryEmotion } from "@/lib/dashboard-segments";
 import { emotions, type Emotion } from "@/lib/dashboard-data";
 import { useTimeRange } from "@/lib/time-range";
+import { useLiveAgg, blendCategoryEmotion } from "@/lib/dashboard-live";
 
 function ChartTooltip({ active, payload, emotionLabel }: any) {
   if (!active || !payload?.length) return null;
@@ -36,8 +37,13 @@ export const CategoryBarChart = memo(function CategoryBarChart({
   const { range } = useTimeRange();
   const [emotion, setEmotion] = useState<Emotion>("happy");
   const active = emotions.find((e) => e.key === emotion)!;
+  const { agg } = useLiveAgg(segment, range);
   const { data, min, span, avg } = useMemo(() => {
-    const rows = segmentCategoryEmotion(segment, emotion, range);
+    const rows = blendCategoryEmotion(
+      segmentCategoryEmotion(segment, emotion, range),
+      agg,
+      emotion,
+    );
     const hi = Math.max(...rows.map((d) => d.value));
     const lo = Math.min(...rows.map((d) => d.value));
     return {
@@ -46,7 +52,7 @@ export const CategoryBarChart = memo(function CategoryBarChart({
       span: Math.max(0.001, hi - lo),
       avg: +(rows.reduce((s, d) => s + d.value, 0) / (rows.length || 1)).toFixed(1),
     };
-  }, [segment, emotion, range]);
+  }, [segment, emotion, range, agg]);
 
   return (
     <section

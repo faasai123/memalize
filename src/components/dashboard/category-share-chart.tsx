@@ -1,6 +1,12 @@
 import { memo, useMemo, useState } from "react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { findSegment, segmentCategoryEmotionShare } from "@/lib/dashboard-segments";
+import {
+  findSegment,
+  segmentCategories,
+  segmentCategoryEmotion,
+  sharesFromPoints,
+} from "@/lib/dashboard-segments";
+import { useLiveAgg, blendCategoryEmotion } from "@/lib/dashboard-live";
 import { emotions, type Emotion } from "@/lib/dashboard-data";
 import { useTimeRange } from "@/lib/time-range";
 
@@ -31,13 +37,20 @@ export const CategoryShareChart = memo(function CategoryShareChart({
   const { range } = useTimeRange();
   const [emotion, setEmotion] = useState<Emotion>("happy");
   const activeEmotion = emotions.find((e) => e.key === emotion)!;
+  const { agg } = useLiveAgg(segment, range);
   const data = useMemo(
-    () =>
-      segmentCategoryEmotionShare(segment, emotion, range).map((c, i) => ({
+    () => {
+      const points = blendCategoryEmotion(
+        segmentCategoryEmotion(segment, emotion, range),
+        agg,
+        emotion,
+      );
+      return sharesFromPoints(points, segmentCategories(segment, range)).map((c, i) => ({
         ...c,
         color: palette[i % palette.length],
-      })),
-    [segment, emotion, range],
+      }));
+    },
+    [segment, emotion, range, agg],
   );
   const top = useMemo(() => [...data].sort((a, b) => b.share - a.share)[0]!, [data]);
 

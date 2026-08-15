@@ -1,6 +1,7 @@
 import { Lightbulb } from "lucide-react";
 import { buildInsights } from "@/lib/dashboard-insights";
 import { useTimeRange, rangeMeta } from "@/lib/time-range";
+import { useLiveAgg } from "@/lib/dashboard-live";
 import type { Emotion } from "@/lib/dashboard-data";
 
 const emotionColor: Record<Emotion, string> = {
@@ -13,7 +14,8 @@ const emotionColor: Record<Emotion, string> = {
 
 export function KeyInsightsPanel({ segment }: { segment: string }) {
   const { range } = useTimeRange();
-  const { insights, headline } = buildInsights(segment, range);
+  const { agg } = useLiveAgg(segment, range);
+  const { insights, headline } = buildInsights(segment, range, agg);
 
   return (
     <section
